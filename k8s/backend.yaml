@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastfood-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fastfood-backend
+  template:
+    metadata:
+      labels:
+        app: fastfood-backend
+    spec:
+      containers:
+        - name: fastfood-backend
+          image: ghcr.io/YOUR_USER/fastfood-backend:v2
+          ports:
+            - containerPort: 3000
+          env:
+            - name: MONGO_URL
+              value: mongodb://mongodb:27017/fastfood
+          env:
+            - name: MONGO_URI
+              value: "mongodb://mongodb-service:27017/fastfood"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fastfood-backend
+spec:
+  selector:
+    app: fastfood-backend
+  ports:
+    - port: 80
+      targetPort: 3000
+  type: LoadBalancer
