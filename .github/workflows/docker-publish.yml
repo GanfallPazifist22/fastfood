@@ -28,11 +28,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
-  uses: docker/build-push-action@v6
-  with:
-    context: .
-    push: true
-    tags: |
-      ghcr.io/ganfallpazifist22/fastfood-backend:latest
-      ghcr.io/ganfallpazifist22/fastfood-backend:${{ github.sha }}
-
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/ganfallpazifist22/fastfood-backend:latest
+            ghcr.io/ganfallpazifist22/fastfood-backend:${{ github.sha }}
