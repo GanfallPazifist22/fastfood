@@ -1,16 +1,16 @@
-﻿name: Docker Build and Push (Lowercase Fix)
+﻿name: Docker Build and Push (Fixed)
 
 on:
   push:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - name: Checkout code
@@ -23,9 +23,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: YOUR_GITHUB_USERNAME
+          username: ganfallpazifist22
           password: ${{ secrets.GHCR_PAT }}
-
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -34,4 +33,4 @@ jobs:
           push: true
           tags: |
             ghcr.io/ganfallpazifist22/fastfood-backend:latest
-            ghcr.io/ganfallpazifist22/fastfood-backend:{{ github.sha }}
+            ghcr.io/ganfallpazifist22/fastfood-backend:${{ github.sha }}
