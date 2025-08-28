@@ -1,17 +1,19 @@
-// src/App.tsx
 import { useEffect, useState } from "react";
 import "./App.css";
 
 type MenuItem = {
   name: string;
   price: number;
-  image?: string;
-  description?: string;
 };
 
 type CartItem = {
   name: string;
   price: number;
+  quantity: number;
+};
+
+type FoodStock = {
+  name: string;
   quantity: number;
 };
 
@@ -21,67 +23,59 @@ function App() {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [foodStock, setFoodStock] = useState<FoodStock[]>([]);
   const [selectedItem, setSelectedItem] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [confirmation, setConfirmation] = useState("");
-  const [search, setSearch] = useState("");
-  const [showModal, setShowModal] = useState(false);
-  const [modalItem, setModalItem] = useState<MenuItem | null>(null);
-  const [showMenuPopup, setShowMenuPopup] = useState(false);
 
-  // Load fonts + fetch menu/orders
+  // Fetch menu, orders, and food stock
   useEffect(() => {
-    if (!document.getElementById("gothic-font")) {
-      const link = document.createElement("link");
-      link.id = "gothic-font";
-      link.rel = "stylesheet";
-      link.href =
-        "https://fonts.googleapis.com/css2?family=UnifrakturCook:wght@700&display=swap";
-      document.head.appendChild(link);
-    }
-
-    // Fetch menu
     fetch("http://localhost:3000/menu")
       .then((res) => res.json())
-      .then((data) =>
-        setMenu(
-          data.map((item: MenuItem) => ({
-            ...item,
-            image: `/assets/${item.name.replace(/\s/g, "").toLowerCase()}.png`,
-            description: `${item.name} is a delicious fast food item.`,
-          }))
-        )
-      )
+      .then(setMenu)
       .catch(() => setError("Failed to load menu."));
 
-    // Fetch orders
     fetch("http://localhost:3000/orders")
       .then((res) => res.json())
       .then(setOrders)
       .catch(() => {});
+
+    fetch("http://localhost:3000/foods")
+      .then((res) => res.json())
+      .then(setFoodStock)
+      .catch(() => console.log("Failed to load food stock"));
   }, []);
 
-  const filteredMenu = menu.filter((item) =>
-    item.name.toLowerCase().includes(search.toLowerCase())
-  );
-
+  // Add item to cart
   const addToCart = () => {
     if (!selectedItem || quantity < 1) return;
+
+    const stockItem = foodStock.find((f) => f.name === selectedItem);
+    if (!stockItem || quantity > stockItem.quantity) {
+      setError(`Only ${stockItem?.quantity || 0} ${selectedItem} available`);
+      return;
+    }
+
     const item = menu.find((m) => m.name === selectedItem);
     if (!item) return;
+
     setCart((prev) => {
       const exists = prev.find((c) => c.name === selectedItem);
       if (exists) {
         return prev.map((c) =>
-          c.name === selectedItem ? { ...c, quantity: c.quantity + quantity } : c
+          c.name === selectedItem
+            ? { ...c, quantity: c.quantity + quantity }
+            : c
         );
       }
       return [...prev, { name: item.name, price: item.price, quantity }];
     });
+
     setSelectedItem("");
     setQuantity(1);
+    setError("");
   };
 
   const removeFromCart = (name: string) => {
@@ -94,6 +88,7 @@ function App() {
     );
   };
 
+  // Place order
   const handleOrder = async () => {
     if (cart.length === 0) return;
     setLoading(true);
@@ -102,12 +97,12 @@ function App() {
 
     try {
       const orderBody = {
-        items: cart.map(c => ({ name: c.name, quantity: c.quantity })),
+        items: cart.map((c) => ({ name: c.name, quantity: c.quantity, price: c.price })),
         total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
         paymentMethod: "Cash",
       };
 
-      const res = await fetch("http://localhost:3000/order", {
+  const res = await fetch("http://localhost:3000/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(orderBody),
@@ -116,11 +111,18 @@ function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Order failed");
 
+      // Update stock in UI
+      setFoodStock((prev) =>
+        prev.map((f) => {
+          const cartItem = cart.find((c) => c.name === f.name);
+          return cartItem ? { ...f, quantity: f.quantity - cartItem.quantity } : f;
+        })
+      );
+
       setConfirmation("Order placed!");
       setCart([]);
 
-      // Refresh order history
-      const ordersRes = await fetch("http://localhost:3000/orders");
+      const ordersRes = await fetch("http://localhost:3001/orders");
       const ordersData = await ordersRes.json();
       setOrders(ordersData);
     } catch (err: any) {
@@ -134,55 +136,29 @@ function App() {
   const tax = subtotal * TAX_RATE;
   const total = subtotal + tax;
 
-  const modalClass = showModal ? "modal show" : "modal";
-
   return (
-    <div className="container" style={{ fontFamily: "Montserrat, sans-serif" }}>
+    <div className="container">
       <h1>🍔 FastFood Order</h1>
 
-      {/* Menu popup */}
-      {showMenuPopup && (
-        <div className="modal show" onClick={() => setShowMenuPopup(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>Menu</h2>
-            <input
-              type="text"
-              placeholder="Search..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            {filteredMenu.map((item) => (
-              <div key={item.name}>
-                <img
-                  src={item.image}
-                  alt={item.name}
-                  onClick={() => {
-                    setModalItem(item);
-                    setShowModal(true);
-                  }}
-                  onError={(e) => ((e.target as HTMLImageElement).src = "/assets/default.png")}
-                  style={{ width: 80, height: 80, cursor: "pointer" }}
-                />
-                <div>{item.name} - ${item.price}</div>
-              </div>
-            ))}
-            <button onClick={() => setShowMenuPopup(false)}>Close</button>
-          </div>
-        </div>
-      )}
-
-      {/* Order section */}
+      {/* Menu */}
       <div>
         <h2>Add to Cart</h2>
-        <select value={selectedItem} onChange={(e) => setSelectedItem(e.target.value)}>
+        <select
+          value={selectedItem}
+          onChange={(e) => setSelectedItem(e.target.value)}
+        >
           <option value="" disabled>
             Select item
           </option>
-          {menu.map((item) => (
-            <option key={item.name} value={item.name}>
-              {item.name}
-            </option>
-          ))}
+          {menu.map((item) => {
+            const stockItem = foodStock.find((f) => f.name === item.name);
+            const disabled = stockItem?.quantity === 0;
+            return (
+              <option key={item.name} value={item.name} disabled={disabled}>
+                {item.name} {disabled ? "(Sold out)" : ""}
+              </option>
+            );
+          })}
         </select>
         <input
           type="number"
@@ -191,6 +167,18 @@ function App() {
           onChange={(e) => setQuantity(Number(e.target.value))}
         />
         <button onClick={addToCart}>Add</button>
+      </div>
+
+      {/* Food stock */}
+      <div>
+        <h2>Current Food Stock</h2>
+        <ul>
+          {foodStock.map((f) => (
+            <li key={f.name}>
+              {f.name}: {f.quantity} remaining
+            </li>
+          ))}
+        </ul>
       </div>
 
       {/* Cart */}
@@ -224,7 +212,7 @@ function App() {
         {error && <p style={{ color: "red" }}>{error}</p>}
       </div>
 
-      {/* Order history */}
+      {/* Orders */}
       <div>
         <h2>Orders</h2>
         {orders.length === 0 ? (
@@ -233,34 +221,16 @@ function App() {
           <ul>
             {orders.map((o, idx) => (
               <li key={idx}>
-                {o.items.map((i: any) => {
-                  const menuItem = menu.find(m => m.name === i.name);
-                  const price = menuItem ? menuItem.price : 0;
-                  return (
-                    <span key={i.name}>
-                      {i.quantity} x {i.name} (${(price * i.quantity).toFixed(2)}){" "}
-                    </span>
-                  );
-                })}
-                {" | "} Total: ${o.total.toFixed(2)} | Payment: {o.paymentMethod}
+                {o.items.map(
+                  (i: any) =>
+                    `${i.quantity} x ${i.name} ($${(i.price * i.quantity).toFixed(2)}) `
+                )}
+                | Total: ${o.total.toFixed(2)} | Payment: {o.paymentMethod}
               </li>
             ))}
           </ul>
         )}
       </div>
-
-      {/* Modal for item */}
-      {showModal && modalItem && (
-        <div className={modalClass} onClick={() => setShowModal(false)}>
-          <div onClick={(e) => e.stopPropagation()}>
-            <img src={modalItem.image} alt={modalItem.name} />
-            <h3>{modalItem.name}</h3>
-            <p>{modalItem.description}</p>
-            <p>Price: ${modalItem.price}</p>
-            <button onClick={() => setShowModal(false)}>Close</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
